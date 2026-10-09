@@ -11,6 +11,16 @@ iT邦幫忙鐵人賽文章的本地 Markdown 編輯器與機械化上稿工具�
 - **圖片自動上傳**：文章裡用 `![images/xxx.png](images/xxx.png)` 引用本地圖片（支援按鈕選檔、拖放、剪貼簿貼上）。按「準備上稿」時透過你已登入的 Chrome 呼叫官方 `/api/upload`，自動替換成 `![URL](URL)` 的官方格式，相同內容（SHA-256）不重複上傳。
 - **全本地執行**：Web 介面只綁 `127.0.0.1`，所有前端資源隨 repo 附帶，沒有任何 CDN。
 
+## 畫面
+
+編輯畫面：左側 Markdown，右側與發表後一致的預覽，表格可直接在預覽裡點儲存格修改。
+
+![編輯畫面](docs/images/editor.png)
+
+文章列表：
+
+![文章列表](docs/images/list.png)
+
 ## 安全設計（刻意為之）
 
 這個版本**刻意排除**任何與帳號登入有關的功能：
@@ -110,7 +120,7 @@ log_file = logs/ithome_editor.log
 
 ## 使用流程
 
-1. 開 `http://127.0.0.1:5451/ithome/`，新增文章或匯入既有的 `.md`／`.txt`。repo 內附兩篇示範文章 `demo-article`、`demo-table`。
+1. 開 `http://127.0.0.1:5451/ithome/`，新增文章或匯入既有的 `.md`／`.txt`。repo 內附兩篇示範文章 `demo-article`、`demo-table`。列表上的「刪除記錄」只移除列表項目，檔案留在 `articles/<slug>/`；「連md檔一併刪除」會整個目錄刪掉，兩者都會先跳確認。
 2. 左側寫 Markdown，右側即時預覽。圖片用按鈕、拖放或貼上，會存到 `articles/<slug>/images/` 並插入引用。
 3. 表格直接在預覽裡點儲存格修改：`Enter` 確認、`Esc` 取消、`Tab` 下一格。
 4. 到 ithelp 建立或打開一篇草稿，把網址（形如 `https://ithelp.ithome.com.tw/articles/<id>/draft`）填進編輯頁的「草稿 URL」。

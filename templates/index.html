@@ -13,7 +13,7 @@
               <th>Slug</th>
               <th><button class="sort-button" type="button" @click="sortBy('updated_at')">更新時間 <span x-text="mark('updated_at')"></span></button></th>
               <th>圖片</th>
-              <th>草稿 URL</th>
+              <th>編輯文章 URL</th>
               <th></th>
             </tr>
           </thead>
@@ -25,7 +25,13 @@
                 <td x-text="item.updated_at"></td>
                 <td><span x-text="item.image_count"></span> 張，未上傳 <span x-text="item.unuploaded_count"></span></td>
                 <td class="draft-cell" x-text="item.draft_url || ''"></td>
-                <td><a class="btn btn-sm btn-outline-primary" :href="prefix + '/edit/' + item.slug">編輯</a></td>
+                <td>
+                  <div class="d-flex gap-1 flex-nowrap">
+                    <a class="btn btn-sm btn-outline-primary" :href="prefix + '/edit/' + item.slug">編輯</a>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" @click="removeArticle(item, 'record')">刪除記錄</button>
+                    <button class="btn btn-sm btn-outline-danger" type="button" @click="removeArticle(item, 'all')">連md檔一併刪除</button>
+                  </div>
+                </td>
               </tr>
             </template>
           </tbody>

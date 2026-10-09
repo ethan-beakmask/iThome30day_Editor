@@ -5,7 +5,7 @@
   <div class="editor-topbar bg-white border p-2 mb-3">
     <div class="row g-2 align-items-center">
       <div class="col-md-3"><input class="form-control form-control-sm" x-model="title" placeholder="標題"></div>
-      <div class="col-md-4"><input class="form-control form-control-sm" x-model="draftUrl" placeholder="草稿 URL"></div>
+      <div class="col-md-4"><input class="form-control form-control-sm" x-model="draftUrl" placeholder="iTHome編輯文章的URL(請用戶確認已登入，並必須自行按[發表文章])"></div>
       <div class="col-md-5 d-flex flex-wrap gap-2 align-items-center">
         <button class="btn btn-sm btn-primary" type="button" @click="saveNow">儲存</button>
         <button class="btn btn-sm btn-outline-secondary" type="button" @click="checkOfficial">官方比對</button>
@@ -30,7 +30,7 @@
         <button type="button" @click="wrap('[', '](https://example.com)')">連結</button>
         <button type="button" @click="linePrefix('> ')">引用</button>
         <button type="button" @click="insertText('\n---\n')">水平線</button>
-        <button type="button" @click="linePrefix('1. ')">有序清單</button>
+        <button type="button" @click="linePrefix('1. ', true)">有序清單</button>
         <button type="button" @click="linePrefix('- ')">無序清單</button>
         <span class="table-popover-anchor">
           <button type="button" @click="tablePopoverOpen = !tablePopoverOpen">表格</button>

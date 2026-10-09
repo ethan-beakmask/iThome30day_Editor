@@ -62,3 +62,42 @@ def test_import_file(tmp_path):
     storage = Storage(tmp_path / "articles")
     storage.import_file(source, "imported", "匯入")
     assert storage.load("imported").body == "# 標題\n"
+
+
+def test_delete_record_removes_list_entry_but_keeps_article_file(tmp_path):
+    storage = Storage(tmp_path)
+    storage.create_article("demo", "示範")
+    article_path = tmp_path / "demo" / "article.md"
+
+    storage.delete_record("demo")
+
+    assert "demo" not in {item["slug"] for item in storage.list_articles()}
+    assert article_path.exists()
+
+
+def test_delete_article_removes_directory(tmp_path):
+    storage = Storage(tmp_path)
+    storage.create_article("demo", "示範")
+    article_dir = tmp_path / "demo"
+
+    storage.delete_article("demo")
+
+    assert not article_dir.exists()
+
+
+def test_delete_missing_article_raises_file_not_found(tmp_path):
+    storage = Storage(tmp_path)
+
+    with pytest.raises(FileNotFoundError):
+        storage.delete_record("missing")
+    with pytest.raises(FileNotFoundError):
+        storage.delete_article("missing")
+
+
+def test_delete_rejects_path_traversal_slug(tmp_path):
+    storage = Storage(tmp_path)
+
+    with pytest.raises(ValueError):
+        storage.delete_record("../bad")
+    with pytest.raises(ValueError):
+        storage.delete_article("../bad")

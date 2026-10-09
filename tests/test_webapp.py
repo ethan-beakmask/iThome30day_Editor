@@ -85,3 +85,29 @@ def test_api_table_validation_errors(tmp_path):
     res = client.post("/ithome/api/table/apply", json={"body": "", "start_line": 0, "end_line": 0, "aligns": [], "header": [], "rows": []})
     assert res.status_code == 400
     assert res.get_json()["ok"] is False
+
+
+def test_api_delete_record_success(tmp_path):
+    app = create_app(make_config(tmp_path))
+    client = app.test_client()
+    storage = app.config["STORAGE"]
+    storage.create_article("demo", "示範")
+
+    res = client.delete("/ithome/api/articles/demo", json={"mode": "record"})
+
+    assert res.status_code == 200
+    assert res.get_json() == {"ok": True}
+    assert storage.list_articles() == []
+    assert (tmp_path / "articles" / "demo" / "article.md").exists()
+
+
+def test_api_delete_rejects_bad_mode(tmp_path):
+    app = create_app(make_config(tmp_path))
+    client = app.test_client()
+    app.config["STORAGE"].create_article("demo", "示範")
+
+    res = client.delete("/ithome/api/articles/demo", json={"mode": "bad"})
+    data = res.get_json()
+
+    assert res.status_code == 400
+    assert data == {"ok": False, "error": "mode 只能是 record 或 all"}

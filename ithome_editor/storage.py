@@ -5,9 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 import json
+import os
 from pathlib import Path
 import re
 import shutil
+import tempfile
 from typing import Any
 
 
@@ -114,6 +116,25 @@ class Storage:
         self._write_json(path / "meta.json", meta)
         return self.load(slug)
 
+    def delete_record(self, slug: str) -> None:
+        """只刪除文章列表記錄，保留 article.md、圖片與其他檔案。"""
+
+        path = self.article_dir(slug)
+        self._ensure_under_articles(path)
+        meta_path = path / "meta.json"
+        if not path.exists() or not meta_path.exists():
+            raise FileNotFoundError("找不到文章")
+        meta_path.unlink()
+
+    def delete_article(self, slug: str) -> None:
+        """刪除整個文章目錄，包含 article.md、圖片與其他檔案。"""
+
+        path = self.article_dir(slug)
+        self._ensure_under_articles(path)
+        if not path.exists():
+            raise FileNotFoundError("找不到文章")
+        shutil.rmtree(path)
+
     def save_image(self, slug: str, filename: str, data: bytes) -> str:
         if len(data) > MAX_IMAGE_SIZE:
             raise ValueError("圖片超過 5MB")
@@ -179,7 +200,18 @@ class Storage:
         return candidate
 
     def _write_json(self, path: Path, data: Any) -> None:
+        # 暫存檔名必須唯一：自動儲存與手動儲存可能同時進行，共用固定的 .tmp 會互相搬走對方的檔案
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        shutil.move(str(tmp), str(path))
+        fd, tmp_name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+            os.replace(tmp_name, path)
+        except Exception:
+            Path(tmp_name).unlink(missing_ok=True)
+            raise
+
+    def _ensure_under_articles(self, path: Path) -> None:
+        target = path.resolve()
+        if self.articles_dir not in target.parents:
+            raise ValueError("文章路徑不合法")

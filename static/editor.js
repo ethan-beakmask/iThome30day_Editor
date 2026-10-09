@@ -59,6 +59,24 @@ function articleList() {
         return;
       }
       location.href = this.prefix + '/edit/' + data.article.slug;
+    },
+    async removeArticle(item, mode) {
+      const message = mode === 'record'
+        ? '只移除列表記錄，article.md 與圖片會留在 articles/' + item.slug + '/ 目錄。確定？'
+        : '將刪除 articles/' + item.slug + '/ 整個目錄（含 article.md 與所有圖片），無法復原。確定？';
+      if (!window.confirm(message)) return;
+      const res = await fetch(this.prefix + '/api/articles/' + item.slug, {
+        method: 'DELETE',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mode: mode})
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        this.error = data.error || '刪除失敗';
+        return;
+      }
+      this.articles = this.articles.filter(article => article.slug !== item.slug);
+      this.error = '';
     }
   };
 }
@@ -74,6 +92,7 @@ function editorApp() {
     dirty: false,
     renderTimer: null,
     saveTimer: null,
+    savePromise: null,
     images: [],
     tables: [],
     pendingFocus: null,
@@ -129,6 +148,19 @@ function editorApp() {
       this.$refs.preview.contentWindow.postMessage({type: 'render', html: data.html, tables: data.tables || [], focus: focus}, '*');
     },
     async saveNow() {
+      // 自動儲存與手動儲存可能重疊：有儲存進行中就等它結束，仍有未存變更才再存一次
+      if (this.savePromise) {
+        const previous = await this.savePromise;
+        if (!this.dirty) return previous;
+      }
+      this.savePromise = this.performSave();
+      try {
+        return await this.savePromise;
+      } finally {
+        this.savePromise = null;
+      }
+    },
+    async performSave() {
       this.saveStatus = '儲存中';
       const res = await fetch(this.prefix + '/api/articles/' + this.slug, {
         method: 'PUT',
@@ -150,25 +182,68 @@ function editorApp() {
       return {start: el.selectionStart, end: el.selectionEnd, text: this.body.slice(el.selectionStart, el.selectionEnd)};
     },
     replaceSelection(text, cursorOffset) {
-      const el = this.$refs.textarea;
       const range = this.selectedRange();
-      this.body = this.body.slice(0, range.start) + text + this.body.slice(range.end);
+      const pos = range.start + (cursorOffset === undefined ? text.length : cursorOffset);
+      this.replaceRange(range.start, range.end, text, pos);
+    },
+    replaceRange(start, end, text, cursorPos) {
+      // 透過 execCommand 改寫，讓瀏覽器原生的 Ctrl+Z / Ctrl+Y 可以反悔工具列、表格編輯等程式化修改；
+      // 直接指定 textarea.value 會清掉瀏覽器的復原堆疊
+      const el = this.$refs.textarea;
+      // execCommand 會觸發 input 事件讓 x-model 先改掉 this.body，所以期望值必須先用舊內容算好
+      const expected = this.body.slice(0, start) + text + this.body.slice(end);
+      el.focus();
+      el.setSelectionRange(start, end);
+      let inserted = false;
+      try {
+        inserted = document.execCommand('insertText', false, text);
+      } catch (_err) {
+        inserted = false;
+      }
+      if (inserted && el.value === expected) {
+        this.body = el.value;
+      } else {
+        this.body = expected;
+      }
       this.changed();
       this.$nextTick(() => {
-        const pos = range.start + (cursorOffset === undefined ? text.length : cursorOffset);
         el.focus();
-        el.setSelectionRange(pos, pos);
+        el.setSelectionRange(cursorPos, cursorPos);
       });
+    },
+    replaceWholeBody(newBody) {
+      // 只改寫前後相同部分之間的差異區段，讓復原堆疊只記錄實際變動
+      const oldBody = this.body;
+      let head = 0;
+      const maxHead = Math.min(oldBody.length, newBody.length);
+      while (head < maxHead && oldBody[head] === newBody[head]) head += 1;
+      let tail = 0;
+      while (tail < maxHead - head && oldBody[oldBody.length - 1 - tail] === newBody[newBody.length - 1 - tail]) tail += 1;
+      const text = newBody.slice(head, newBody.length - tail);
+      this.replaceRange(head, oldBody.length - tail, text, head + text.length);
     },
     wrap(prefix, suffix) {
       const range = this.selectedRange();
-      const text = range.text || '文字';
-      this.replaceSelection(prefix + text + suffix, prefix.length + text.length + suffix.length);
+      if (!range.text) {
+        // 沒有圈選：只插入語法符號，游標停在符號之間
+        this.replaceSelection(prefix + suffix, prefix.length);
+        return;
+      }
+      this.replaceSelection(prefix + range.text + suffix);
     },
-    linePrefix(prefix) {
+    linePrefix(prefix, numbered) {
       const range = this.selectedRange();
-      const text = range.text || '文字';
-      const lines = text.split('\n').map(line => prefix + line).join('\n');
+      if (!range.text) {
+        this.replaceSelection(prefix);
+        return;
+      }
+      // 空白列不加前綴也不編號；有序清單依序編號
+      let index = 0;
+      const lines = range.text.split('\n').map(line => {
+        if (!line.trim()) return line;
+        index += 1;
+        return (numbered ? index + '. ' : prefix) + line;
+      }).join('\n');
       this.replaceSelection(lines);
     },
     insertText(text) {
@@ -234,9 +309,8 @@ function editorApp() {
         this.showModal('表格更新失敗', data.error);
         return;
       }
-      this.body = data.body;
       this.pendingFocus = message.focus || null;
-      this.changed();
+      this.replaceWholeBody(data.body);
     },
     async uploadPicked(event) {
       const file = event.target.files[0];

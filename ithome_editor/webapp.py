@@ -59,6 +59,18 @@ def create_app(config: AppConfig | None = None) -> Flask:
         article = _storage().save(slug, data.get("title", ""), data.get("body", ""), data.get("draft_url"))
         return jsonify({"ok": True, "article": _article_json(article), "images": _image_status(slug, article.body)})
 
+    @bp.delete("/api/articles/<slug>")
+    def api_delete_article(slug: str):
+        data = _payload()
+        mode = data.get("mode")
+        if mode == "record":
+            _storage().delete_record(slug)
+        elif mode == "all":
+            _storage().delete_article(slug)
+        else:
+            return _json_error("mode 只能是 record 或 all", 400)
+        return jsonify({"ok": True})
+
     @bp.post("/api/articles/<slug>/images")
     def api_upload_local_image(slug: str):
         file = request.files.get("image")
