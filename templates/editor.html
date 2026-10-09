@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}編輯 {{ article.title }}{% endblock %}
+{% block body %}
+<div x-data="editorApp()" x-init="init()" class="editor-page">
+  <div class="editor-topbar bg-white border p-2 mb-3">
+    <div class="row g-2 align-items-center">
+      <div class="col-md-3"><input class="form-control form-control-sm" x-model="title" placeholder="標題"></div>
+      <div class="col-md-4"><input class="form-control form-control-sm" x-model="draftUrl" placeholder="草稿 URL"></div>
+      <div class="col-md-5 d-flex flex-wrap gap-2 align-items-center">
+        <button class="btn btn-sm btn-primary" type="button" @click="saveNow">儲存</button>
+        <button class="btn btn-sm btn-outline-secondary" type="button" @click="checkOfficial">官方比對</button>
+        <button class="btn btn-sm btn-success" type="button" @click="publish">準備上稿</button>
+        <a class="btn btn-sm btn-outline-dark" href="{{ prefix }}/">回列表</a>
+        <span class="small text-muted" x-text="'已輸入 ' + body.length + ' 字'"></span>
+        <span class="small" x-text="saveStatus"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="editor-split">
+    <section class="editor-column editor-left">
+      <div class="toolbar border bg-white p-2">
+        <button type="button" @click="wrap('## ', '')">H2</button>
+        <button type="button" @click="wrap('### ', '')">H3</button>
+        <button type="button" @click="wrap('**', '**')">粗體</button>
+        <button type="button" @click="wrap('*', '*')">斜體</button>
+        <button type="button" @click="wrap('~~', '~~')">刪除線</button>
+        <button type="button" @click="wrap('`', '`')">行內程式碼</button>
+        <button type="button" @click="insertCodeBlock">程式碼區塊</button>
+        <button type="button" @click="wrap('[', '](https://example.com)')">連結</button>
+        <button type="button" @click="linePrefix('> ')">引用</button>
+        <button type="button" @click="insertText('\n---\n')">水平線</button>
+        <button type="button" @click="linePrefix('1. ')">有序清單</button>
+        <button type="button" @click="linePrefix('- ')">無序清單</button>
+        <span class="table-popover-anchor">
+          <button type="button" @click="tablePopoverOpen = !tablePopoverOpen">表格</button>
+          <div class="table-popover border bg-white shadow-sm p-2" x-show="tablePopoverOpen" x-cloak>
+            <label class="form-label form-label-sm mb-1" for="tableRows">列數</label>
+            <input id="tableRows" class="form-control form-control-sm mb-2" type="number" min="2" max="50" x-model.number="tableRows">
+            <label class="form-label form-label-sm mb-1" for="tableCols">欄數</label>
+            <input id="tableCols" class="form-control form-control-sm mb-2" type="number" min="1" max="20" x-model.number="tableCols">
+            <div class="d-flex gap-2">
+              <button type="button" @click="insertTable">插入</button>
+              <button type="button" @click="tablePopoverOpen = false">取消</button>
+            </div>
+          </div>
+        </span>
+        <button type="button" @click="$refs.imageInput.click()">圖片</button>
+        <input class="d-none" type="file" accept="image/png,image/jpeg,image/gif,image/webp" x-ref="imageInput" @change="uploadPicked">
+      </div>
+      <textarea class="editor-textarea" x-ref="textarea" x-model="body" @input="changed" @keydown.tab.prevent="insertText('    ')" @drop.prevent="dropFiles" @paste="handlePaste"></textarea>
+      <section class="image-status border bg-white p-2 mt-2">
+        <h2 class="h6">圖片狀態</h2>
+        <template x-if="images.length === 0">
+          <p class="small text-muted mb-0">正文尚未引用本地圖片。</p>
+        </template>
+        <template x-for="item in images" :key="item.path">
+          <div class="small image-row">
+            <code x-text="item.path"></code>
+            <span :class="item.uploaded ? 'text-success' : 'text-warning'" x-text="item.uploaded ? '已上傳' : '未上傳'"></span>
+            <span x-text="item.url"></span>
+          </div>
+        </template>
+      </section>
+    </section>
+    <section class="editor-column editor-right">
+      <iframe class="preview-frame" x-ref="preview" src="{{ prefix }}/preview-frame"></iframe>
+    </section>
+  </div>
+
+  <div class="modal-backdrop-local" x-show="modalOpen" x-cloak>
+    <div class="modal-dialog-local bg-white border shadow">
+      <div class="d-flex justify-content-between align-items-center border-bottom p-3">
+        <h2 class="h5 mb-0" x-text="modalTitle"></h2>
+        <button type="button" class="btn-close" @click="modalOpen = false" aria-label="關閉"></button>
+      </div>
+      <pre class="modal-pre p-3 mb-0" x-text="modalText"></pre>
+    </div>
+  </div>
+</div>
+<script>
+window.APP_PREFIX = {{ prefix|tojson }};
+window.ARTICLE = {{ article.__dict__|tojson }};
+</script>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='editor.js') }}"></script>
+{% endblock %}

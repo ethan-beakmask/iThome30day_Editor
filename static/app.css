@@ -1,0 +1,147 @@
+/* 本檔由瀏覽器作為 CSS 載入，提供本地編輯器樣式。 */
+
+body {
+  background: #f5f6f7;
+  color: #303233;
+}
+
+.page-narrow {
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+.sort-button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.draft-cell {
+  max-width: 280px;
+  overflow-wrap: anywhere;
+}
+
+.editor-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+/* 左欄自由寬度、右欄固定：iframe 內容 734px + 捲軸與邊框，讓預覽換行位置與 ithelp 文章頁一致 */
+.editor-split {
+  height: calc(100vh - 132px);
+  min-height: 520px;
+  display: flex;
+  gap: 1rem;
+  align-items: stretch;
+}
+.editor-left {
+  flex: 1 1 0;
+  min-width: 320px;
+}
+.editor-right {
+  flex: 0 0 756px;
+}
+@media (max-width: 1150px) {
+  .editor-split { flex-direction: column; height: auto; }
+  .editor-right { flex: 0 0 auto; height: 80vh; }
+  .editor-left { height: 70vh; }
+}
+
+.editor-column {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.toolbar button {
+  border: 1px solid #ced4da;
+  background: #fff;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 14px;
+}
+
+.table-popover-anchor {
+  position: relative;
+  display: inline-block;
+}
+
+.table-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  width: 180px;
+}
+
+.table-popover .form-label-sm {
+  font-size: 13px;
+}
+
+.editor-textarea {
+  flex: 1;
+  width: 100%;
+  resize: none;
+  border: 1px solid #ced4da;
+  border-top: 0;
+  padding: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.preview-frame {
+  width: 100%;
+  height: 100%;
+  border: 1px solid #ced4da;
+  background: #fff;
+}
+
+.image-status {
+  max-height: 130px;
+  overflow: auto;
+}
+
+.image-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 80px minmax(0, 2fr);
+  gap: 8px;
+  align-items: baseline;
+}
+
+.modal-backdrop-local {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modal-dialog-local {
+  width: min(900px, 96vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-pre {
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 14px;
+}
+
+[x-cloak] {
+  display: none !important;
+}

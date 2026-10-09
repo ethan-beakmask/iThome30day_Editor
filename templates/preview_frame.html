@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/ithelp/bootstrap3.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='ithelp_cache/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='ithelp_cache/railscasts.css') }}">
+  <style>
+    body {
+      margin: 0;
+      background: #F2F2F2;
+      font-family: "Lato","PingFang TC","Helvetica Neue",Helvetica,"微軟正黑體","新細明體",Arial,sans-serif;
+      line-height: 1.6;
+      color: #303233;
+      font-size: 16px;
+    }
+    /* Lato 本地字型（ithelp 用 Google Fonts，封閉網路改載 vendor 檔） */
+    @font-face { font-family: "Lato"; font-style: normal; font-weight: 400; src: url("{{ url_for('static', filename='vendor/fonts/lato-400.woff2') }}") format("woff2"); }
+    @font-face { font-family: "Lato"; font-style: normal; font-weight: 700; src: url("{{ url_for('static', filename='vendor/fonts/lato-700.woff2') }}") format("woff2"); }
+    /* 內容寬度固定 694px：2026-10-09 於 ithelp 文章頁實測 .markdown__style 寬度（container 1170 的版面），
+       讓換行位置與發表後完全一致 */
+    .preview-shell {
+      width: 734px;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      background: #fff;
+      box-sizing: border-box;
+    }
+    .preview-shell .markdown__style {
+      width: 694px;
+    }
+    .ie-table {
+      position: relative;
+    }
+    .ie-table:hover,
+    .ie-table:focus-within {
+      outline: 2px solid rgba(91, 155, 213, 0.28);
+      outline-offset: 2px;
+    }
+    .ie-cell {
+      cursor: text;
+    }
+    .ie-cell-editor {
+      width: 100%;
+      min-height: 32px;
+      resize: none;
+      border: 0;
+      outline: 0;
+      background: #fffbe6;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      line-height: 1.5;
+    }
+    .ie-table-toolbar {
+      position: absolute;
+      z-index: 50;
+      display: flex;
+      width: max-content;
+      white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-shell">
+    <div class="qa-markdown"><div class="markdown"><div class="markdown__style" id="content"></div></div></div>
+  </div>
+  <script src="{{ url_for('static', filename='vendor/highlight.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='preview_table.js') }}"></script>
+  <script>
+    window.addEventListener('message', function (event) {
+      if (!event.data || event.data.type !== 'render') return;
+      const content = document.getElementById('content');
+      content.innerHTML = event.data.html || '';
+      content.querySelectorAll('pre code').forEach(function (block) {
+        window.hljs.highlightElement(block);
+      });
+      window.setupPreviewTables(event.data.tables || [], event.data.focus || null);
+    });
+  </script>
+</body>
+</html>

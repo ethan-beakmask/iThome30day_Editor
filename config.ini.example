@@ -1,0 +1,12 @@
+[ithome]
+; 已登入 iT邦幫忙的 Chrome 遠端除錯埠（本機請用 127.0.0.1）
+cdp_url = http://127.0.0.1:9222
+site = https://ithelp.ithome.com.tw
+
+[server]
+; 基於安全考量只允許綁定 127.0.0.1
+host = 127.0.0.1
+port = 5451
+prefix = /ithome
+articles_dir = articles
+log_file = logs/ithome_editor.log

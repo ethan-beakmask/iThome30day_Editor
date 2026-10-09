@@ -1,0 +1,5 @@
+flask>=3.1,<4
+markdown-it-py>=3.0,<4
+linkify-it-py>=2.0,<3
+mdit-py-plugins>=0.4,<1
+playwright>=1.50
