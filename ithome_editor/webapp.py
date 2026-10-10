@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 import traceback
 
 from flask import Blueprint, Flask, jsonify, redirect, render_template, request, send_file, url_for
@@ -14,6 +15,22 @@ from .renderer import render_with_tables, replace_lines, serialize_table
 from .storage import Storage
 
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def build_info() -> dict[str, str]:
+    """回報程式所在目錄與 git 短碼，供頁尾辨識目前跑的是哪一棵工作樹。"""
+
+    try:
+        rev = subprocess.run(
+            ["git", "-C", str(PROJECT_ROOT), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=3, check=False,
+        ).stdout.strip() or "no-git"
+    except (OSError, subprocess.SubprocessError):
+        rev = "no-git"
+    return {"root": str(PROJECT_ROOT), "rev": rev}
+
+
 def create_app(config: AppConfig | None = None) -> Flask:
     """建立 Flask 應用程式。"""
 
@@ -22,7 +39,12 @@ def create_app(config: AppConfig | None = None) -> Flask:
     app = Flask(__name__, static_url_path=f"{prefix}/static", static_folder="../static", template_folder="../templates")
     app.config["APP_CONFIG"] = config
     app.config["STORAGE"] = Storage(config.server.articles_dir)
+    app.config["BUILD_INFO"] = build_info()
     bp = Blueprint("main", __name__, url_prefix=prefix)
+
+    @app.context_processor
+    def _inject_build_info():
+        return {"build_info": app.config["BUILD_INFO"]}
 
     @bp.get("/")
     def index():

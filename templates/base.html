@@ -18,6 +18,9 @@
   <main class="container-fluid py-3">
     {% block body %}{% endblock %}
   </main>
+  <footer class="container-fluid py-2 border-top small text-muted">
+    執行目錄 <code>{{ build_info.root }}</code> · git <code>{{ build_info.rev }}</code>
+  </footer>
   <script src="{{ url_for('static', filename='vendor/bootstrap.bundle.min.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
