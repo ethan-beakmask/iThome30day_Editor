@@ -5,9 +5,13 @@ body {
   color: #303233;
 }
 
-.page-narrow {
-  max-width: 1320px;
-  margin: 0 auto;
+/* 資料區全寬：左留 100px、右留 200px（2026-10-11 用戶指定），不做置中限寬 */
+main.container-fluid {
+  padding-left: 100px;
+  padding-right: 200px;
+}
+@media (max-width: 1150px) {
+  main.container-fluid { padding-left: 12px; padding-right: 12px; }
 }
 
 .sort-button {
