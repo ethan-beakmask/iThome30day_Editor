@@ -130,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "check":
             with Publisher(config, storage) as publisher:
                 identical, diff = publisher.check(args.slug, args.draft_url)
-            print("一致" if identical else diff)
+            print(f"一致（{diff}）" if identical else diff)
             return 0 if identical else 1
         if args.command == "publish":
             with Publisher(config, storage) as publisher:

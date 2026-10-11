@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from ithome_editor.config import AppConfig, IthomeConfig, ServerConfig
-from ithome_editor.publisher import Publisher, replace_local_images, sha256_file
+from ithome_editor.publisher import Publisher, parse_editor_url, replace_local_images, sha256_file
 from ithome_editor.storage import Storage
 
 
@@ -22,14 +22,20 @@ class FakeLocator:
 class FakePage:
     """模擬 Playwright page。"""
 
-    url = "https://ithelp.ithome.com.tw/articles/1/draft"
-
-    def __init__(self, login_text="已登入"):
+    def __init__(self, login_text="已登入", url="https://ithelp.ithome.com.tw/articles/1/draft", goto_url=None):
         self.calls = []
         self.login_text = login_text
+        self.url = url
+        self.goto_calls = []
+        self.goto_url = goto_url
 
     def locator(self, _selector):
         return FakeLocator(self.login_text)
+
+    def goto(self, url, wait_until=None):
+        self.goto_calls.append((url, wait_until))
+        if self.goto_url is not None:
+            self.url = self.goto_url
 
     def evaluate(self, script, payload=None):
         self.calls.append((script, payload))
@@ -41,8 +47,8 @@ class FakePage:
 class FakeContext:
     """模擬 Playwright context。"""
 
-    def __init__(self, page):
-        self.pages = [page]
+    def __init__(self, *pages):
+        self.pages = list(pages)
 
     def new_page(self):
         return self.pages[0]
@@ -51,8 +57,8 @@ class FakeContext:
 class FakeBrowser:
     """模擬 Playwright browser。"""
 
-    def __init__(self, page):
-        self.contexts = [FakeContext(page)]
+    def __init__(self, *pages):
+        self.contexts = [FakeContext(*pages)]
 
 
 def make_config(tmp_path: Path) -> AppConfig:
@@ -85,6 +91,54 @@ def test_sha256_file(tmp_path):
     assert sha256_file(path) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
 
 
+def test_parse_editor_url():
+    assert parse_editor_url("https://ithelp.ithome.com.tw/articles/1/draft") == ("1", "draft")
+    assert parse_editor_url("https://ithelp.ithome.com.tw/articles/1/edit") == ("1", "edit")
+    assert parse_editor_url("https://ithelp.ithome.com.tw/articles/1/draft/") == ("1", "draft")
+    assert parse_editor_url("https://ithelp.ithome.com.tw/articles/1/edit?foo=bar#top") == ("1", "edit")
+    assert parse_editor_url("https://ithelp.ithome.com.tw/articles/1") is None
+    assert parse_editor_url("https://ithelp.ithome.com.tw/users/1/draft") is None
+
+
+def test_find_or_open_page_matches_edit_when_draft_given(tmp_path):
+    config = make_config(tmp_path)
+    page = FakePage(url="https://ithelp.ithome.com.tw/articles/1/edit")
+    publisher = Publisher(config)
+    publisher.browser = FakeBrowser(page)
+
+    found = publisher.find_or_open_page("https://ithelp.ithome.com.tw/articles/1/draft")
+
+    assert found is page
+    assert page.goto_calls == []
+    assert publisher.last_page_url == page.url
+
+
+def test_find_or_open_page_prefers_same_kind(tmp_path):
+    config = make_config(tmp_path)
+    edit_page = FakePage(url="https://ithelp.ithome.com.tw/articles/1/edit")
+    draft_page = FakePage(url="https://ithelp.ithome.com.tw/articles/1/draft")
+    publisher = Publisher(config)
+    publisher.browser = FakeBrowser(edit_page, draft_page)
+
+    found = publisher.find_or_open_page("https://ithelp.ithome.com.tw/articles/1/draft")
+
+    assert found is draft_page
+    assert publisher.last_page_url == draft_page.url
+
+
+def test_find_or_open_page_rejects_redirect(tmp_path):
+    config = make_config(tmp_path)
+    page = FakePage(
+        url="https://ithelp.ithome.com.tw/articles/2/edit",
+        goto_url="https://ithelp.ithome.com.tw/articles/1",
+    )
+    publisher = Publisher(config)
+    publisher.browser = FakeBrowser(page)
+
+    with pytest.raises(RuntimeError, match="不是編輯頁"):
+        publisher.find_or_open_page("https://ithelp.ithome.com.tw/articles/1/draft")
+
+
 def test_assert_logged_in_rejects_empty_text(tmp_path):
     config = make_config(tmp_path)
     publisher = Publisher(config)
@@ -106,6 +160,7 @@ def test_publish_uploads_once_then_reuses(tmp_path):
     published, log = publisher.publish("demo")
 
     assert "![https://ithelp.ithome.com.tw/upload/images/x.png](https://ithelp.ithome.com.tw/upload/images/x.png)" in published
+    assert log[0].startswith("使用編輯頁：")
     assert any("已上傳" in line for line in log)
     assert storage.load_uploads("demo")["images/a.png"]["sha256"] == sha256_file(image)
 

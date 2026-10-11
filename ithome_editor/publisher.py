@@ -9,6 +9,7 @@ import hashlib
 from pathlib import Path
 import re
 from typing import Any
+from urllib.parse import urlparse
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
@@ -41,6 +42,16 @@ def replace_local_images(body: str, mapping: dict[str, str]) -> str:
     return LOCAL_IMAGE_RE.sub(repl, body)
 
 
+def parse_editor_url(url: str) -> tuple[str, str] | None:
+    """解析 ithelp 文章編輯頁 URL，回傳文章 id 與頁面種類。"""
+
+    parsed = urlparse(url)
+    match = re.fullmatch(r"/articles/(\d+)/(draft|edit)/?", parsed.path)
+    if not match:
+        return None
+    return match.group(1), match.group(2)
+
+
 class Publisher:
     """封裝 ithelp 上稿流程。"""
 
@@ -49,6 +60,7 @@ class Publisher:
         self.storage = storage or Storage(config.server.articles_dir)
         self._playwright = None
         self.browser = None
+        self.last_page_url = None
 
     def connect(self):
         """連線到使用者已啟動的 Chrome 遠端除錯埠。"""
@@ -83,12 +95,41 @@ class Publisher:
 
         browser = self.browser or self.connect()
         contexts = browser.contexts or [browser.new_context()]
-        for context in contexts:
-            for page in context.pages:
-                if page.url == url or page.url.startswith(url):
-                    return page
+        parsed_target = parse_editor_url(url)
+        if parsed_target:
+            target_article_id, target_kind = parsed_target
+            fallback_page = None
+            for context in contexts:
+                for page in context.pages:
+                    parsed_page = parse_editor_url(page.url)
+                    if not parsed_page:
+                        continue
+                    page_article_id, page_kind = parsed_page
+                    if page_article_id != target_article_id:
+                        continue
+                    if page_kind == target_kind:
+                        self.last_page_url = page.url
+                        return page
+                    fallback_page = fallback_page or page
+            if fallback_page:
+                self.last_page_url = fallback_page.url
+                return fallback_page
+        else:
+            for context in contexts:
+                for page in context.pages:
+                    if page.url == url or page.url.startswith(url):
+                        self.last_page_url = page.url
+                        return page
+
         page = contexts[0].new_page()
         page.goto(url, wait_until="networkidle")
+        self.last_page_url = page.url
+        if parsed_target:
+            parsed_page = parse_editor_url(page.url)
+            if not parsed_page or parsed_page[0] != parsed_target[0]:
+                raise RuntimeError(
+                    f"開啟 {url} 後落在 {page.url}，不是編輯頁；請在瀏覽器開好該文章的 /draft 或 /edit 頁再試"
+                )
         return page
 
     def assert_logged_in(self, page) -> None:
@@ -155,7 +196,7 @@ class Publisher:
         page = self.find_or_open_page(target_url)
         self.assert_logged_in(page)
 
-        log: list[str] = []
+        log: list[str] = [f"使用編輯頁：{self.last_page_url}"]
         uploads = self.storage.load_uploads(slug)
         mapping: dict[str, str] = {}
         missing: list[str] = []
@@ -198,7 +239,7 @@ class Publisher:
                 """,
                 {"title": article.title, "body": published_md},
             )
-            log.append("已寫入 ithelp 草稿頁，請到瀏覽器按儲存草稿或發表")
+            log.append("已寫入 ithelp 編輯頁，請到瀏覽器按儲存草稿或發表／更新")
         return published_md, log
 
     def official_preview(self, page, md: str) -> str:
@@ -246,7 +287,9 @@ class Publisher:
         self.assert_logged_in(page)
         official_lines = normalize_html(self.official_preview(page, body))
         diff = "\n".join(difflib.unified_diff(local_lines, official_lines, fromfile="local", tofile="official", lineterm=""))
-        return not diff, diff
+        if not diff:
+            return True, f"使用編輯頁：{self.last_page_url}"
+        return False, diff
 
 
 def _content_type(path: Path) -> str:

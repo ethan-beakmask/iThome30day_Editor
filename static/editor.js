@@ -379,7 +379,7 @@ function editorApp() {
         this.showModal('官方比對失敗', data.error);
         return;
       }
-      this.showModal('官方比對', data.identical ? '一致' : data.diff);
+      this.showModal('官方比對', data.identical ? '一致\n' + data.diff : data.diff);
     },
     showModal(title, text) {
       this.modalTitle = title;
