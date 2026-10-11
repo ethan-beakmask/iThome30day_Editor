@@ -1,5 +1,6 @@
 """測試 Flask API 的表格預覽與套用流程。"""
 
+from datetime import datetime
 from pathlib import Path
 
 from ithome_editor.config import AppConfig, IthomeConfig, ServerConfig
@@ -111,3 +112,59 @@ def test_api_delete_rejects_bad_mode(tmp_path):
 
     assert res.status_code == 400
     assert data == {"ok": False, "error": "mode 只能是 record 或 all"}
+
+
+def test_api_save_validates_day(tmp_path):
+    app = create_app(make_config(tmp_path))
+    client = app.test_client()
+    storage = app.config["STORAGE"]
+    storage.create_article("demo", "示範")
+
+    res = client.put("/ithome/api/articles/demo", json={"title": "示範", "body": "", "day": "abc"})
+    assert res.status_code == 400
+    assert res.get_json() == {"ok": False, "error": "Day 必須是正整數"}
+
+    res = client.put("/ithome/api/articles/demo", json={"title": "示範", "body": "", "day": ""})
+    assert res.status_code == 200
+    assert storage.load("demo").day is None
+
+    res = client.put("/ithome/api/articles/demo", json={"title": "示範", "body": "", "day": 5})
+    assert res.status_code == 200
+    assert storage.load("demo").day == 5
+
+    # 缺鍵不更動，空字串清空
+    res = client.put("/ithome/api/articles/demo", json={"title": "示範", "body": ""})
+    assert res.status_code == 200
+    assert storage.load("demo").day == 5
+    res = client.put("/ithome/api/articles/demo", json={"title": "示範", "body": "", "day": ""})
+    assert res.status_code == 200
+    assert storage.load("demo").day is None
+
+
+def test_api_saved_draft_marks_and_rewrites_url(tmp_path):
+    app = create_app(make_config(tmp_path))
+    client = app.test_client()
+    storage = app.config["STORAGE"]
+    storage.create_article("demo", "示範")
+    storage.save("demo", "示範", "", "https://ithelp.ithome.com.tw/articles/10423260/draft")
+
+    res = client.post("/ithome/api/articles/demo/saved-draft", json={"saved": True})
+    data = res.get_json()
+
+    assert res.status_code == 200
+    assert data["ok"] is True
+    assert data["article"]["saved_draft"] is True
+    assert data["article"]["draft_url"] == "https://ithelp.ithome.com.tw/articles/10423260/edit"
+    assert data["article"]["article_id"] == "10423260"
+
+
+def test_index_page_renders_tabs(tmp_path):
+    app = create_app(make_config(tmp_path))
+    client = app.test_client()
+
+    res = client.get("/ithome/")
+    html = res.get_data(as_text=True)
+
+    assert res.status_code == 200
+    assert "其他年份" in html
+    assert str(datetime.now().year) in html

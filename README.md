@@ -132,7 +132,7 @@ log_file = logs/ithome_editor.log
 ```
 articles/<slug>/
 ├── article.md            # 你的稿子（唯一真相）
-├── meta.json             # 標題、草稿 URL、時間
+├── meta.json             # 標題、草稿 URL、時間、專題、Day、是否已手動儲存草稿
 ├── images/               # 本地圖片
 ├── uploads.json          # 已上傳圖片的官方 URL 與 SHA-256
 └── article.published.md  # 圖片已替換成官方 URL 的最終稿

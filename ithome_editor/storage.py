@@ -11,6 +11,7 @@ import re
 import shutil
 import tempfile
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 
 
 SLUG_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
@@ -30,12 +31,30 @@ class Article:
     draft_url: str | None
     created_at: str
     updated_at: str
+    series: str = ""
+    day: int | None = None
+    saved_draft: bool = False
+    saved_draft_at: str | None = None
+
+
+# save() 的 day 參數用這個哨兵代表「未提供、不更動」，None 代表「清空」
+UNSET: Any = object()
 
 
 def now_text() -> str:
     """回傳儲存用的目前時間字串。"""
 
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def editor_article_id(url: str | None) -> str | None:
+    """從 ithelp 草稿或編輯頁 URL 取出文章編號。"""
+
+    if not url:
+        return None
+    path = urlparse(url).path
+    match = re.fullmatch(r"/articles/(\d+)/(?:draft|edit)/?", path)
+    return match.group(1) if match else None
 
 
 class Storage:
@@ -61,6 +80,10 @@ class Storage:
         rows = []
         for meta_path in sorted(self.articles_dir.glob("*/meta.json")):
             data = json.loads(meta_path.read_text(encoding="utf-8"))
+            data.setdefault("series", "")
+            data.setdefault("day", None)
+            data.setdefault("saved_draft", False)
+            data.setdefault("saved_draft_at", None)
             slug = data["slug"]
             body = (meta_path.parent / "article.md").read_text(encoding="utf-8") if (meta_path.parent / "article.md").exists() else ""
             images = self.find_local_images(body)
@@ -70,6 +93,7 @@ class Storage:
                     **data,
                     "image_count": len(images),
                     "unuploaded_count": sum(1 for image in images if image not in uploads),
+                    "article_id": editor_article_id(data.get("draft_url")),
                 }
             )
         rows.sort(key=lambda item: item.get("updated_at", ""), reverse=True)
@@ -82,7 +106,17 @@ class Storage:
         path.mkdir(parents=True)
         (path / "images").mkdir()
         stamp = now_text()
-        meta = {"title": title, "slug": slug, "draft_url": None, "created_at": stamp, "updated_at": stamp}
+        meta = {
+            "title": title,
+            "slug": slug,
+            "draft_url": None,
+            "created_at": stamp,
+            "updated_at": stamp,
+            "series": "",
+            "day": None,
+            "saved_draft": False,
+            "saved_draft_at": None,
+        }
         (path / "article.md").write_text("", encoding="utf-8")
         self._write_json(path / "meta.json", meta)
         self._write_json(path / "uploads.json", {})
@@ -101,9 +135,21 @@ class Storage:
             draft_url=meta.get("draft_url"),
             created_at=meta["created_at"],
             updated_at=meta["updated_at"],
+            series=meta.get("series", ""),
+            day=meta.get("day"),
+            saved_draft=meta.get("saved_draft", False),
+            saved_draft_at=meta.get("saved_draft_at"),
         )
 
-    def save(self, slug: str, title: str, body: str, draft_url: str | None = None) -> Article:
+    def save(
+        self,
+        slug: str,
+        title: str,
+        body: str,
+        draft_url: str | None = None,
+        series: str | None = None,
+        day: int | None | Any = UNSET,
+    ) -> Article:
         path = self.article_dir(slug)
         if not path.exists():
             raise FileNotFoundError("找不到文章")
@@ -112,8 +158,34 @@ class Storage:
         meta["updated_at"] = now_text()
         if draft_url is not None:
             meta["draft_url"] = draft_url or None
+        if series is not None:
+            meta["series"] = series.strip()
+        if day is not UNSET:
+            meta["day"] = day
         (path / "article.md").write_text(body, encoding="utf-8")
         self._write_json(path / "meta.json", meta)
+        return self.load(slug)
+
+    def mark_saved_draft(self, slug: str, saved: bool) -> Article:
+        """標記使用者是否已在 ithelp 按過儲存草稿。"""
+
+        path = self.article_dir(slug)
+        if not path.exists():
+            raise FileNotFoundError("找不到文章")
+        meta_path = path / "meta.json"
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        if saved:
+            meta["saved_draft"] = True
+            meta["saved_draft_at"] = now_text()
+            draft_url = meta.get("draft_url")
+            parsed = urlparse(draft_url) if draft_url else None
+            if parsed and re.fullmatch(r"/articles/\d+/draft/?", parsed.path):
+                new_path = parsed.path.rstrip("/")[:-len("/draft")] + "/edit"
+                meta["draft_url"] = urlunparse(parsed._replace(path=new_path))
+        else:
+            meta["saved_draft"] = False
+            meta["saved_draft_at"] = None
+        self._write_json(meta_path, meta)
         return self.load(slug)
 
     def delete_record(self, slug: str) -> None:

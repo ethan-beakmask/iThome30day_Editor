@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 import subprocess
 import traceback
@@ -12,7 +13,7 @@ from werkzeug.exceptions import HTTPException
 from .config import AppConfig, load_config
 from .publisher import Publisher
 from .renderer import render_with_tables, replace_lines, serialize_table
-from .storage import Storage
+from .storage import UNSET, Storage, editor_article_id
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -49,12 +50,14 @@ def create_app(config: AppConfig | None = None) -> Flask:
     @bp.get("/")
     def index():
         storage = _storage()
-        return render_template("index.html", articles=storage.list_articles(), prefix=prefix)
+        return render_template("index.html", articles=storage.list_articles(), prefix=prefix, current_year=datetime.now().year)
 
     @bp.get("/edit/<slug>")
     def editor(slug: str):
-        article = _storage().load(slug)
-        return render_template("editor.html", article=article, prefix=prefix)
+        storage = _storage()
+        article = storage.load(slug)
+        series_options = sorted({item.get("series", "") for item in storage.list_articles() if item.get("series")})
+        return render_template("editor.html", article=article, prefix=prefix, series_options=series_options)
 
     @bp.get("/preview-frame")
     def preview_frame():
@@ -78,8 +81,25 @@ def create_app(config: AppConfig | None = None) -> Flask:
     @bp.put("/api/articles/<slug>")
     def api_save_article(slug: str):
         data = _payload()
-        article = _storage().save(slug, data.get("title", ""), data.get("body", ""), data.get("draft_url"))
+        try:
+            day = _parse_day(data)
+        except ValueError as exc:
+            return _json_error(str(exc), 400)
+        article = _storage().save(
+            slug,
+            data.get("title", ""),
+            data.get("body", ""),
+            data.get("draft_url"),
+            series=data.get("series"),
+            day=day,
+        )
         return jsonify({"ok": True, "article": _article_json(article), "images": _image_status(slug, article.body)})
+
+    @bp.post("/api/articles/<slug>/saved-draft")
+    def api_saved_draft(slug: str):
+        data = _payload()
+        article = _storage().mark_saved_draft(slug, data.get("saved", True))
+        return jsonify({"ok": True, "article": _article_json(article)})
 
     @bp.delete("/api/articles/<slug>")
     def api_delete_article(slug: str):
@@ -207,7 +227,28 @@ def _article_json(article) -> dict:
         "draft_url": article.draft_url,
         "created_at": article.created_at,
         "updated_at": article.updated_at,
+        "series": article.series,
+        "day": article.day,
+        "saved_draft": article.saved_draft,
+        "saved_draft_at": article.saved_draft_at,
+        "article_id": editor_article_id(article.draft_url),
     }
+
+
+def _parse_day(data: dict) -> int | None | object:
+    """缺鍵代表不更動（UNSET）；None 或空字串代表清空；其餘必須是正整數。"""
+
+    if "day" not in data:
+        return UNSET
+    if data.get("day") is None or data.get("day") == "":
+        return None
+    try:
+        day = int(data.get("day"))
+    except (TypeError, ValueError):
+        raise ValueError("Day 必須是正整數") from None
+    if day < 1:
+        raise ValueError("Day 必須是正整數")
+    return day
 
 
 def _image_status(slug: str, body: str) -> list[dict[str, str | bool]]:

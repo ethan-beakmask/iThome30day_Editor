@@ -143,6 +143,10 @@ main.container-fluid {
   flex-direction: column;
 }
 
+.modal-dialog-narrow {
+  width: min(520px, 96vw);
+}
+
 .modal-pre {
   overflow: auto;
   white-space: pre-wrap;

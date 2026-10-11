@@ -4,22 +4,52 @@ function articleList() {
   return {
     prefix: window.APP_PREFIX,
     articles: window.INITIAL_ARTICLES || [],
+    currentYear: window.CURRENT_YEAR,
+    activeTab: 'current',
     sortField: 'updated_at',
     sortAsc: false,
+    createModalOpen: false,
+    importModalOpen: false,
     newSlug: '',
     newTitle: '',
     importPath: '',
     importSlug: '',
     importTitle: '',
     error: '',
+    get currentRows() {
+      return this.articles.filter(item => String(item.updated_at || '').slice(0, 4) === String(this.currentYear));
+    },
+    get otherRows() {
+      return this.articles.filter(item => String(item.updated_at || '').slice(0, 4) !== String(this.currentYear));
+    },
+    get filtered() {
+      return this.activeTab === 'current' ? this.currentRows : this.otherRows;
+    },
     get sorted() {
-      const rows = [...this.articles];
+      const rows = [...this.filtered];
       rows.sort((a, b) => {
-        const av = a[this.sortField] || '';
-        const bv = b[this.sortField] || '';
-        return this.sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+        const av = a[this.sortField];
+        const bv = b[this.sortField];
+        const emptyA = this.isEmpty(av);
+        const emptyB = this.isEmpty(bv);
+        if (emptyA && emptyB) return 0;
+        if (emptyA) return 1;
+        if (emptyB) return -1;
+        const result = this.compareValues(av, bv);
+        return this.sortAsc ? result : -result;
       });
       return rows;
+    },
+    isEmpty(value) {
+      return value === null || value === undefined || value === '';
+    },
+    compareValues(a, b) {
+      let av = a;
+      let bv = b;
+      if (typeof av === 'boolean') av = av ? 1 : 0;
+      if (typeof bv === 'boolean') bv = bv ? 1 : 0;
+      if (typeof av === 'number' && typeof bv === 'number') return av - bv;
+      return String(av).localeCompare(String(bv));
     },
     mark(field) {
       if (this.sortField !== field) return '↕';
@@ -29,8 +59,16 @@ function articleList() {
       if (this.sortField === field) this.sortAsc = !this.sortAsc;
       else {
         this.sortField = field;
-        this.sortAsc = field === 'title';
+        this.sortAsc = ['title', 'series', 'day'].includes(field);
       }
+    },
+    openCreateModal() {
+      this.error = '';
+      this.createModalOpen = true;
+    },
+    openImportModal() {
+      this.error = '';
+      this.importModalOpen = true;
     },
     async createArticle() {
       this.error = '';
@@ -88,6 +126,10 @@ function editorApp() {
     title: window.ARTICLE.title,
     body: window.ARTICLE.body,
     draftUrl: window.ARTICLE.draft_url || '',
+    series: window.ARTICLE.series || '',
+    day: window.ARTICLE.day === null || window.ARTICLE.day === undefined ? '' : window.ARTICLE.day,
+    savedDraft: Boolean(window.ARTICLE.saved_draft),
+    savedDraftAt: window.ARTICLE.saved_draft_at || null,
     saveStatus: '',
     dirty: false,
     renderTimer: null,
@@ -102,6 +144,7 @@ function editorApp() {
     modalOpen: false,
     modalTitle: '',
     modalText: '',
+    modalAskSaved: false,
     init() {
       this.scheduleRender();
       window.addEventListener('message', (event) => {
@@ -165,7 +208,13 @@ function editorApp() {
       const res = await fetch(this.prefix + '/api/articles/' + this.slug, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({title: this.title, body: this.body, draft_url: this.draftUrl})
+        body: JSON.stringify({
+          title: this.title,
+          body: this.body,
+          draft_url: this.draftUrl,
+          series: this.series,
+          day: this.day === '' || this.day === null ? null : this.day
+        })
       });
       const data = await res.json();
       if (!data.ok) {
@@ -174,8 +223,35 @@ function editorApp() {
       }
       this.dirty = false;
       this.images = data.images || this.images;
+      // 只回寫存稿狀態；標題／專題／Day／URL 不回寫，否則自動儲存的回應會蓋掉使用者打字中的內容
+      if (data.article) {
+        this.savedDraft = Boolean(data.article.saved_draft);
+        this.savedDraftAt = data.article.saved_draft_at || null;
+      }
       this.saveStatus = '已儲存';
       return true;
+    },
+    async markSavedDraft(saved) {
+      const res = await fetch(this.prefix + '/api/articles/' + this.slug + '/saved-draft', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({saved: saved})
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || '存稿狀態更新失敗');
+      this.savedDraft = Boolean(data.article.saved_draft);
+      this.savedDraftAt = data.article.saved_draft_at || null;
+      this.draftUrl = data.article.draft_url || '';
+      return data.article;
+    },
+    async toggleSavedDraft() {
+      const saved = this.savedDraft;
+      try {
+        await this.markSavedDraft(saved);
+      } catch (err) {
+        this.savedDraft = !saved;
+        this.showModal('存稿狀態更新失敗', err.message);
+      }
     },
     selectedRange() {
       const el = this.$refs.textarea;
@@ -365,6 +441,16 @@ function editorApp() {
         return;
       }
       this.showModal('準備上稿完成', data.log.join('\n') + '\n\n' + data.published_md);
+      this.modalAskSaved = !this.savedDraft;
+    },
+    async confirmSavedDraftFromModal() {
+      try {
+        await this.markSavedDraft(true);
+        this.modalAskSaved = false;
+        this.modalText += '\n已標記存稿，URL 已改為 /edit';
+      } catch (err) {
+        this.showModal('存稿狀態更新失敗', err.message);
+      }
     },
     async checkOfficial() {
       if (!(await this.saveNow())) return;
@@ -382,6 +468,7 @@ function editorApp() {
       this.showModal('官方比對', data.identical ? '一致\n' + data.diff : data.diff);
     },
     showModal(title, text) {
+      this.modalAskSaved = false;
       this.modalTitle = title;
       this.modalText = text || '';
       this.modalOpen = true;

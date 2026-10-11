@@ -1,68 +1,109 @@
 {% extends "base.html" %}
 {% block title %}文章列表{% endblock %}
 {% block body %}
-<div x-data="articleList()">
-  <div class="row g-3">
-    <section class="col-lg-8">
-      <h1 class="h4 mb-3">文章列表</h1>
-      <div class="table-responsive border bg-white">
-        <table class="table table-sm align-middle mb-0">
-          <thead>
-            <tr>
-              <th class="col-grow"><button class="sort-button" type="button" @click="sortBy('title')">標題 <span x-text="mark('title')"></span></button></th>
-              <th class="col-nowrap">Slug</th>
-              <th class="col-nowrap"><button class="sort-button" type="button" @click="sortBy('updated_at')">更新時間 <span x-text="mark('updated_at')"></span></button></th>
-              <th class="col-nowrap">圖片</th>
-              <th class="col-nowrap">編輯文章 URL</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <template x-for="item in sorted" :key="item.slug">
-              <tr>
-                <td x-text="item.title"></td>
-                <td class="col-nowrap"><code x-text="item.slug"></code></td>
-                <td class="col-nowrap" x-text="item.updated_at"></td>
-                <td class="col-nowrap"><span x-text="item.image_count"></span> 張，未上傳 <span x-text="item.unuploaded_count"></span></td>
-                <td class="col-nowrap" x-text="item.draft_url || ''"></td>
-                <td class="col-nowrap">
-                  <div class="d-flex gap-1 flex-nowrap">
-                    <a class="btn btn-sm btn-outline-primary" :href="prefix + '/edit/' + item.slug">編輯</a>
-                    <button class="btn btn-sm btn-outline-secondary" type="button" @click="removeArticle(item, 'record')">刪除記錄</button>
-                    <button class="btn btn-sm btn-outline-danger" type="button" @click="removeArticle(item, 'all')">連md檔一併刪除</button>
-                  </div>
-                </td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
+<div x-data="articleList()" @keydown.escape.window="createModalOpen = false; importModalOpen = false">
+  <h1 class="h4 mb-3">文章列表</h1>
+  <div class="d-flex justify-content-between align-items-end gap-3 mb-3 flex-wrap">
+    <ul class="nav nav-tabs">
+      <li class="nav-item">
+        <button class="nav-link" :class="{active: activeTab === 'current'}" type="button" @click="activeTab = 'current'">本年（{{ current_year }}） (<span x-text="currentRows.length"></span>)</button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" :class="{active: activeTab === 'other'}" type="button" @click="activeTab = 'other'">其他年份 (<span x-text="otherRows.length"></span>)</button>
+      </li>
+    </ul>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary" type="button" @click="openCreateModal">新增文章</button>
+      <button class="btn btn-outline-primary" type="button" @click="openImportModal">匯入</button>
+    </div>
+  </div>
+  <div class="table-responsive border bg-white">
+    <table class="table table-sm align-middle mb-0">
+      <thead>
+        <tr>
+          <th class="col-grow"><button class="sort-button" type="button" @click="sortBy('title')">標題 <span x-text="mark('title')"></span></button></th>
+          <th class="col-nowrap"><button class="sort-button" type="button" @click="sortBy('series')">專題 <span x-text="mark('series')"></span></button></th>
+          <th class="col-nowrap"><button class="sort-button" type="button" @click="sortBy('day')">Day <span x-text="mark('day')"></span></button></th>
+          <th class="col-nowrap">Slug</th>
+          <th class="col-nowrap"><button class="sort-button" type="button" @click="sortBy('updated_at')">更新時間 <span x-text="mark('updated_at')"></span></button></th>
+          <th class="col-nowrap"><button class="sort-button" type="button" @click="sortBy('saved_draft')">存稿 <span x-text="mark('saved_draft')"></span></button></th>
+          <th class="col-nowrap">圖片</th>
+          <th class="col-nowrap">編號</th>
+          <th class="col-nowrap">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="item in sorted" :key="item.slug">
+          <tr>
+            <td x-text="item.title"></td>
+            <td class="col-nowrap" x-text="item.series || ''"></td>
+            <td class="col-nowrap" x-text="item.day || ''"></td>
+            <td class="col-nowrap"><code x-text="item.slug"></code></td>
+            <td class="col-nowrap" x-text="item.updated_at"></td>
+            <td class="col-nowrap" x-text="item.saved_draft ? '是' : '否'"></td>
+            <td class="col-nowrap"><span x-text="item.image_count"></span> 張，未上傳 <span x-text="item.unuploaded_count"></span></td>
+            <td class="col-nowrap">
+              <template x-if="item.article_id">
+                <a :href="item.draft_url" target="_blank" rel="noopener" x-text="item.article_id"></a>
+              </template>
+              <template x-if="!item.article_id && item.draft_url">
+                <span x-text="item.draft_url"></span>
+              </template>
+            </td>
+            <td class="col-nowrap">
+              <div class="d-flex gap-1 flex-nowrap">
+                <a class="btn btn-sm btn-outline-primary" :href="prefix + '/edit/' + item.slug">編輯</a>
+                <button class="btn btn-sm btn-outline-secondary" type="button" @click="removeArticle(item, 'record')">刪除記錄</button>
+                <button class="btn btn-sm btn-outline-danger" type="button" @click="removeArticle(item, 'all')">連md檔一併刪除</button>
+              </div>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="modal-backdrop-local" x-show="createModalOpen" x-cloak>
+    <div class="modal-dialog-local modal-dialog-narrow bg-white border shadow">
+      <div class="d-flex justify-content-between align-items-center border-bottom p-3">
+        <h2 class="h5 mb-0">新增文章</h2>
+        <button type="button" class="btn-close" @click="createModalOpen = false" aria-label="關閉"></button>
       </div>
-    </section>
-    <aside class="col-lg-4">
-      <section class="mb-4">
-        <h2 class="h5 mb-3">新增文章</h2>
-        <form @submit.prevent="createArticle" class="vstack gap-2">
-          <input class="form-control" x-model="newSlug" placeholder="slug">
-          <input class="form-control" x-model="newTitle" placeholder="標題">
+      <form @submit.prevent="createArticle" class="vstack gap-2 p-3">
+        <input class="form-control" x-model="newSlug" placeholder="slug">
+        <input class="form-control" x-model="newTitle" placeholder="標題">
+        <p class="text-danger mb-0" x-text="error"></p>
+        <div class="d-flex justify-content-end gap-2">
+          <button class="btn btn-outline-secondary" type="button" @click="createModalOpen = false">取消</button>
           <button class="btn btn-primary" type="submit">新增文章</button>
-        </form>
-      </section>
-      <section>
-        <h2 class="h5 mb-3">匯入</h2>
-        <form @submit.prevent="importArticle" class="vstack gap-2">
-          <input class="form-control" x-model="importPath" placeholder="伺服器端檔案路徑">
-          <input class="form-control" x-model="importSlug" placeholder="slug">
-          <input class="form-control" x-model="importTitle" placeholder="標題">
-          <button class="btn btn-outline-primary" type="submit">匯入</button>
-        </form>
-      </section>
-      <p class="text-danger mt-3" x-text="error"></p>
-    </aside>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop-local" x-show="importModalOpen" x-cloak>
+    <div class="modal-dialog-local modal-dialog-narrow bg-white border shadow">
+      <div class="d-flex justify-content-between align-items-center border-bottom p-3">
+        <h2 class="h5 mb-0">匯入</h2>
+        <button type="button" class="btn-close" @click="importModalOpen = false" aria-label="關閉"></button>
+      </div>
+      <form @submit.prevent="importArticle" class="vstack gap-2 p-3">
+        <input class="form-control" x-model="importPath" placeholder="伺服器端檔案路徑">
+        <input class="form-control" x-model="importSlug" placeholder="slug">
+        <input class="form-control" x-model="importTitle" placeholder="標題">
+        <p class="text-danger mb-0" x-text="error"></p>
+        <div class="d-flex justify-content-end gap-2">
+          <button class="btn btn-outline-secondary" type="button" @click="importModalOpen = false">取消</button>
+          <button class="btn btn-primary" type="submit">匯入</button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 <script>
 window.INITIAL_ARTICLES = {{ articles|tojson }};
 window.APP_PREFIX = {{ prefix|tojson }};
+window.CURRENT_YEAR = {{ current_year|tojson }};
 </script>
 {% endblock %}
 {% block scripts %}
