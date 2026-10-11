@@ -9,11 +9,11 @@
         <table class="table table-sm align-middle mb-0">
           <thead>
             <tr>
-              <th><button class="sort-button" type="button" @click="sortBy('title')">標題 <span x-text="mark('title')"></span></button></th>
-              <th>Slug</th>
-              <th><button class="sort-button" type="button" @click="sortBy('updated_at')">更新時間 <span x-text="mark('updated_at')"></span></button></th>
-              <th>圖片</th>
-              <th>編輯文章 URL</th>
+              <th class="col-grow"><button class="sort-button" type="button" @click="sortBy('title')">標題 <span x-text="mark('title')"></span></button></th>
+              <th class="col-nowrap">Slug</th>
+              <th class="col-nowrap"><button class="sort-button" type="button" @click="sortBy('updated_at')">更新時間 <span x-text="mark('updated_at')"></span></button></th>
+              <th class="col-nowrap">圖片</th>
+              <th class="col-nowrap">編輯文章 URL</th>
               <th></th>
             </tr>
           </thead>
@@ -21,11 +21,11 @@
             <template x-for="item in sorted" :key="item.slug">
               <tr>
                 <td x-text="item.title"></td>
-                <td><code x-text="item.slug"></code></td>
-                <td x-text="item.updated_at"></td>
-                <td><span x-text="item.image_count"></span> 張，未上傳 <span x-text="item.unuploaded_count"></span></td>
-                <td class="draft-cell" x-text="item.draft_url || ''"></td>
-                <td>
+                <td class="col-nowrap"><code x-text="item.slug"></code></td>
+                <td class="col-nowrap" x-text="item.updated_at"></td>
+                <td class="col-nowrap"><span x-text="item.image_count"></span> 張，未上傳 <span x-text="item.unuploaded_count"></span></td>
+                <td class="col-nowrap" x-text="item.draft_url || ''"></td>
+                <td class="col-nowrap">
                   <div class="d-flex gap-1 flex-nowrap">
                     <a class="btn btn-sm btn-outline-primary" :href="prefix + '/edit/' + item.slug">編輯</a>
                     <button class="btn btn-sm btn-outline-secondary" type="button" @click="removeArticle(item, 'record')">刪除記錄</button>
